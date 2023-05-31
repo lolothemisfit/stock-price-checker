@@ -1,28 +1,25 @@
 'use strict';
 
-var expect = require('chai').expect;
-const mongodb = require('mongodb')
 const mongoose = require('mongoose')
 const objectId = mongoose.Types.ObjectId;
-const request = require('request');
-const app = require('../server');
+const request = require('request-promise-native');
 
 let stockSchema = new mongoose.Schema({
   code: String,
-  likes: {type: Number, default: 0},
+  likes: {type: [String], default: []}
 })
 
-let Stock = mongoose.model('Stock', stockSchema);
+let Stock = mongoose.model('stock', stockSchema);
 
 
-async function saveStock(code, like, ip){
+function saveStock(code, like, ip){
   return Stock.findOne({code: code})
   .then(stock => {
     if (!stock){
       let newStock = new Stock({code: code, likes: like ? [ip] : []})
       return newStock.save()
     }else {
-      if (like && stock.likes.indexOf(ip) == -1){
+      if (like && stock.likes.indexOf(ip) === -1){
         stock.likes.push(ip)
       }
       return stock.save()
@@ -30,12 +27,13 @@ async function saveStock(code, like, ip){
   })
 }
 
-async function parseData(data){
+function parseData(data){
    let i = 0;
    let stockData = [];
    let likes = [];
    while (i < data.length){
-    let stock = {stock: data[i].code, price: JSON.parse(data[i+1][1]).close};
+    let stock = {stock: data[i].code, price: JSON.parse(data[i+1]).latestPrice};
+     // console.log(JSON.parse(data[i+1]).latestPrice)
     likes.push(data[i].likes.length);
     stockData.push(stock);
     i += 2;
@@ -49,13 +47,15 @@ async function parseData(data){
     stockData[0].likes = likes[0];
     stockData = stockData[0];
    }
+   
    return stockData;
+  
 }
 
 
 module.exports = function (app) {
   
-  app.get('/api/testing', (req, re) => {
+  app.get('/api/testing', (req, res) => {
     res.json({IP: req.ip})
    })
    
@@ -76,9 +76,9 @@ module.exports = function (app) {
       })   
 
       Promise.all(promises)
-      .then(async data => {
-        let stockData = await parseData(data);
-        res.json({stockData})
+      .then( data => {
+        let stockData =  parseData(data);
+        res.json({ stockData });
       })
       .catch(err => {
         console.log(err)
